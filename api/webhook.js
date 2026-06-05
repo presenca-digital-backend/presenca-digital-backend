@@ -9,15 +9,31 @@ const supabase = createClient(
 );
 const resend = new Resend(process.env.RESEND_API_KEY);
 
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
+
+async function getRawBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', (chunk) => chunks.push(chunk));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
+  const rawBody = await getRawBody(req);
   const sig = req.headers['stripe-signature'];
-  let event;
 
+  let event;
   try {
     event = stripe.webhooks.constructEvent(
-      req.body, sig, process.env.STRIPE_WEBHOOK_SECRET
+      rawBody, sig, process.env.STRIPE_WEBHOOK_SECRET
     );
   } catch (err) {
     return res.status(400).send(`Webhook Error: ${err.message}`);
@@ -52,8 +68,6 @@ export default async function handler(req, res) {
            style="background:#6366f1;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;">
           Acessar Plataforma
         </a>
-        <br><br>
-        <p style="color:#666;font-size:12px;">Guarde bem sua senha. Em caso de dúvidas responda este email.</p>
       `
     });
   }
