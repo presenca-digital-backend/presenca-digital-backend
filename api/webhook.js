@@ -2,12 +2,12 @@ import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 
-const stripe = new Stripe(process.env.CHAVE_SEGRETA_LISTRADA);
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const supabase = createClient(
   process.env.SUPABASE_URL,
-  process.env.CHAVE_DE_SERVIÇO_SUPABASE
+  process.env.SUPABASE_SERVICE_KEY
 );
-const resend = new Resend(process.env.REENVIAR_API_CHAVE);
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
@@ -17,7 +17,7 @@ export default async function handler(req, res) {
 
   try {
     event = stripe.webhooks.constructEvent(
-      req.body, sig, process.env.STRIPE_WEBHOOK_SEGREDO
+      req.body, sig, process.env.STRIPE_WEBHOOK_SECRET
     );
   } catch (err) {
     return res.status(400).send(`Webhook Error: ${err.message}`);
