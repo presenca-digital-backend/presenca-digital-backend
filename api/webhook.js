@@ -24,12 +24,75 @@ async function getRawBody(req) {
   });
 }
 
+async function criarAcessoEEnviarEmail(email) {
+  const password = 'Mestre#' + Math.random().toString(36).slice(2, 8).toUpperCase();
+
+  const { error } = await supabase.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true
+  });
+
+  if (error && error.message !== 'User already registered') {
+    throw new Error(error.message);
+  }
+
+  await resend.emails.send({
+    from: 'Presença Digital 2.0 <noreply@dmaalmacheckout.shop>',
+    to: email,
+    subject: '🎉 Seu acesso ao Presença Digital 2.0 está pronto!',
+    html: `
+      <h2>Pagamento confirmado! 🎉</h2>
+      <p>Olá! Seu acesso foi liberado. Aqui estão seus dados:</p>
+      <p><strong>Login:</strong> ${email}</p>
+      <p><strong>Senha:</strong> ${password}</p>
+      <br>
+      <a href="https://dmaalmacheckout.shop" style="background:#6366f1;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;">
+        Acessar Plataforma
+      </a>
+    `
+  });
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
   const rawBody = await getRawBody(req);
-  const sig = req.headers['stripe-signature'];
+  const source = req.headers['x-hotmart-hottok'] ? 'hotmart' : 'stripe';
 
+  // ── HOTMART ──
+  if (source === 'hotmart') {
+    const hottok = req.headers['x-hotmart-hottok'];
+    if (hottok !== process.env.HOTMART_HOTTOK) {
+      return res.status(401).json({ error: 'Token inválido' });
+    }
+
+    let body;
+    try {
+      body = JSON.parse(rawBody.toString());
+    } catch {
+      return res.status(400).json({ error: 'Body inválido' });
+    }
+
+    const event = body.event;
+    const status = body.data?.purchase?.status;
+
+    if (event === 'PURCHASE_APPROVED' || status === 'APPROVED' || status === 'COMPLETE') {
+      const email = body.data?.buyer?.email;
+      if (!email) return res.status(400).json({ error: 'Email não encontrado' });
+
+      try {
+        await criarAcessoEEnviarEmail(email);
+      } catch (err) {
+        return res.status(500).json({ error: err.message });
+      }
+    }
+
+    return res.status(200).json({ received: true });
+  }
+
+  // ── STRIPE ──
+  const sig = req.headers['stripe-signature'];
   let event;
   try {
     event = stripe.webhooks.constructEvent(
@@ -42,33 +105,12 @@ export default async function handler(req, res) {
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
     const email = session.customer_details.email;
-    const password = 'Mestre#' + Math.random().toString(36).slice(2, 8).toUpperCase();
 
-    const { error } = await supabase.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true
-    });
-
-    if (error && error.message !== 'User already registered') {
-      return res.status(500).json({ error: error.message });
+    try {
+      await criarAcessoEEnviarEmail(email);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
     }
-
-    await resend.emails.send({
-      from: 'Presença Digital 2.0 <noreply@dmaalmacheckout.shop>',
-      to: email,
-      subject: '🎉 Seu acesso ao Presença Digital 2.0 está pronto!',
-      html: `
-        <h2>Pagamento confirmado! 🎉</h2>
-        <p>Olá! Seu acesso foi liberado. Aqui estão seus dados:</p>
-        <p><strong>Login:</strong> ${email}</p>
-        <p><strong>Senha:</strong> ${password}</p>
-        <br>
-        <a href="https://dmaalmacheckout.shop" style="background:#6366f1;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;">
-          Acessar Plataforma
-        </a>
-      `
-    });
   }
 
   res.status(200).json({ received: true });
