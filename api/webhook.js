@@ -64,8 +64,7 @@ export default async function handler(req, res) {
         <p><strong>Login:</strong> ${email}</p>
         <p><strong>Senha:</strong> ${password}</p>
         <br>
-        <a href="https://xn--platafomrapresenadigital-bec.https://dmaalmacheckout.shop/" 
-           style="background:#6366f1;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;">
+        <a href="https://dmaalmacheckout.shop" style="background:#6366f1;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;">
           Acessar Plataforma
         </a>
       `
